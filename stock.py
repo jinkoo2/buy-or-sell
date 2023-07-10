@@ -5,6 +5,7 @@ def save_dict_as_json(data, filepath):
     with open(filepath, 'w') as json_file:
         json.dump(data, json_file)
 
+
 def get_ticker_list():
     import pandas as pd
     csv_file = 'nasdaq_screener_1688487590280.csv'
