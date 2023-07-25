@@ -1,8 +1,6 @@
 from pymongo import MongoClient
 import os
 
-
-
 server = 'apps.monocycle18.com'
 port = 5051
 

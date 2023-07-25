@@ -1,13 +1,18 @@
 
 import yfinance as yf
-from stock import save_dict_as_json, get_ticker_list
-from stock_mongo import add_a_stock, get_the_lastly_added_stock
+from stock import save_dict_as_json, get_ticker_list_from_nasdaq_screener_file
+import mongo_stocks
+import mongo_recent_stocks
+import mongo_logs 
+import utils
 import os
 from datetime import datetime
 import math
 import time
 import concurrent.futures
 
+def get_ticker_list():
+    return get_ticker_list_from_nasdaq_screener_file('nasdaq_screener_1688487590280.csv')
 
 def run_one(count):
     ticker_list = get_ticker_list()
@@ -15,7 +20,7 @@ def run_one(count):
     print('N=', N)
 
     # find the last added symbol
-    lastly_added_stock = get_the_lastly_added_stock()
+    lastly_added_stock = mongo_stocks.get_the_lastly_added_stock()
     print('lastly_added_stock=', lastly_added_stock['symbol'])
 
     if lastly_added_stock is None:
@@ -87,7 +92,9 @@ def run_one(count):
                 }    
             }
             
-            add_a_stock(s)
+            mongo_stocks.add_a_stock(s)
+            mongo_recent_stocks.update_a_stock(s)
+
         except Exception as e:
             print(e)
 
@@ -148,7 +155,9 @@ def run_tickers(ticker_list, start_index, last_index):
                 }    
             }
             
-            add_a_stock(s)
+            mongo_stocks.add_a_stock(s)
+            mongo_recent_stocks.update_a_stock(s)
+
         except Exception as e:
             print(e)
 
@@ -160,17 +169,25 @@ def get_tickers_of_page(ticker_list, page_num, items_per_page):
         i_end = len(ticker_list)
     return ticker_list[i_start:i_end]
 
-def run_once2():
-    ticker_list = get_ticker_list()
+def run_once_threadpool():
+    
+    max_thread_workers = 8
+    nasdaq_screener_file = 'nasdaq_screener_1688487590280.csv'
+
+    ticker_list = get_ticker_list_from_nasdaq_screener_file(nasdaq_screener_file)
     items_per_page = 100
     N = len(ticker_list)
     num_of_pages = math.floor(N/items_per_page)+1
 
-    # create a thread pool with 2 threads
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+    # create a thread pool
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_thread_workers)
 
     for page_num in range(num_of_pages):
+        
+        # get tickers of a page
         tickers_of_page = get_tickers_of_page(ticker_list, page_num, items_per_page)
+        
+        # run for the 
         pool.submit(run_tickers, tickers_of_page, page_num * items_per_page, N)
 
 
@@ -180,14 +197,27 @@ def run_once2():
     print("Main thread continuing to run")
     print('done')
 
+def log(msg):
+    print(msg)
+    mongo_logs.log(msg)
+
+log('Application started')
 
 i=0
 while True:
     time1 = time.time()
-    run_once2()
+    run_once_threadpool()
     time2 = time.time()
     execution_time = time2 - time1
-    print(f"Execution time: {i}th run - {execution_time} seconds")
+    
+    # execution time
+    log(f"Execution time for [{i}]th round - {execution_time} s")
+    
+    # disk space
+    log(f'disk info:'+utils.get_disk_info_string())
+    
+    # sleep
     print('sleeping for 5 minutes...')
     time.sleep(60 * 5)
+
     i=i+1
